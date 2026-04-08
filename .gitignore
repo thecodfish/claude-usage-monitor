@@ -1,0 +1,23 @@
+# Build artifacts
+.build/
+*.o
+*.d
+
+# App bundle (built via make)
+ClaudeUsageMonitor.app/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode / SPM
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+.swiftpm/
+
+# Temp files
+*.tmp
+/tmp/
