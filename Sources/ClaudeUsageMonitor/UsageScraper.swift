@@ -13,9 +13,29 @@ final class UsageModel: ObservableObject {
     @Published var isLoggedOut: Bool = false
     @Published var errorMessage: String? = nil
 
+    // Target reset Date derived from sessionReset text, used for live countdown.
+    var sessionResetDate: Date? = nil
+
     var statusBarTitle: String {
         guard let p = sessionPercent else { return "–%" }
+        if p >= 100, let resetDate = sessionResetDate {
+            let remaining = resetDate.timeIntervalSinceNow
+            if remaining > 0 {
+                return formatCountdown(remaining)
+            }
+        }
         return "\(p)%"
+    }
+
+    private func formatCountdown(_ seconds: TimeInterval) -> String {
+        let totalMinutes = Int(seconds / 60)
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        } else {
+            return "\(minutes)m"
+        }
     }
 }
 
@@ -189,6 +209,41 @@ final class UsageScraper: NSObject {
         model.weeklyReset    = data.weeklyReset
         model.lastUpdated    = Date()
         model.isLoggedOut    = false
+
+        // Compute the target reset Date so statusBarTitle can show a live countdown.
+        if let interval = Self.parseResetInterval(data.sessionReset) {
+            model.sessionResetDate = Date().addingTimeInterval(interval)
+        } else {
+            model.sessionResetDate = nil
+        }
+    }
+
+    // Parse "Resets in X day(s) Y hr Z min" → TimeInterval.
+    // Handles any subset of day/hr/min components in any order.
+    static func parseResetInterval(_ text: String) -> TimeInterval? {
+        guard !text.isEmpty else { return nil }
+        var total: TimeInterval = 0
+        var found = false
+
+        let patterns: [(String, TimeInterval)] = [
+            (#"(\d+)\s*day"#,  86400),
+            (#"(\d+)\s*hr"#,    3600),
+            (#"(\d+)\s*min"#,     60),
+        ]
+
+        for (pattern, multiplier) in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let nsText = text as NSString
+            let range = NSRange(location: 0, length: nsText.length)
+            if let match = regex.firstMatch(in: text, range: range),
+               let captureRange = Range(match.range(at: 1), in: text),
+               let value = Double(text[captureRange]) {
+                total += value * multiplier
+                found = true
+            }
+        }
+
+        return found ? total : nil
     }
 
     // MARK: - JavaScript
