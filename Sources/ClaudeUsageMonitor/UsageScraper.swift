@@ -282,18 +282,26 @@ final class UsageScraper: NSObject {
         }
 
         function parseBar(el) {
-            var percent = parseInt(el.getAttribute('aria-valuenow') || '0', 10);
+            var ariaPercent = parseInt(el.getAttribute('aria-valuenow') || '-1', 10);
             var node = el;
-            for (var i = 0; i < 8; i++) {
+            // Walk up until we find the smallest ancestor with EXACTLY ONE "Resets" line.
+            // Stopping at the first ancestor that has any "Resets" text can overshoot into
+            // a parent container that holds multiple sections, causing the wrong reset to match.
+            // "X% used" text is preferred over aria-valuenow, which can be 0 during React's
+            // initial render even when the true value is non-zero.
+            for (var i = 0; i < 10; i++) {
                 if (!node.parentElement) break;
                 node = node.parentElement;
                 var text = node.innerText || '';
-                var resetMatch = text.match(/Resets[^\\n]+/);
-                if (resetMatch) {
-                    return { percent: percent, reset: resetMatch[0].trim(), sectionText: text };
+                var resets = text.match(/Resets[^\\n]+/g) || [];
+                if (resets.length === 1) {
+                    var pctMatch = text.match(/(\\d+)%\\s*used/i);
+                    var percent = pctMatch ? parseInt(pctMatch[1], 10) :
+                                  (ariaPercent >= 0 ? ariaPercent : 0);
+                    return { percent: percent, reset: resets[0].trim(), sectionText: text };
                 }
             }
-            return { percent: percent, reset: '', sectionText: '' };
+            return { percent: ariaPercent >= 0 ? ariaPercent : 0, reset: '', sectionText: '' };
         }
 
         var session = parseBar(bars[0]);
