@@ -43,11 +43,22 @@ struct PopoverView: View {
                         .opacity(0.15)
                         .padding(.vertical, 12)
 
-                    // Design
                     UsageRow(
                         label: "Design",
                         percent: model.designPercent,
                         resetText: model.designReset
+                    )
+                }
+
+                if model.extraPercent != nil {
+                    Divider()
+                        .opacity(0.15)
+                        .padding(.vertical, 12)
+
+                    ExtraUsageRow(
+                        percent: model.extraPercent,
+                        resetText: model.extraReset,
+                        spent: model.extraSpent
                     )
                 }
 
@@ -100,6 +111,58 @@ private struct UsageRow: View {
                 }
             } else {
                 // Loading placeholder
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 6)
+                HStack {
+                    Text("–%")
+                        .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Extra Usage Row
+
+private struct ExtraUsageRow: View {
+    let percent: Int?
+    let resetText: String?
+    let spent: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Extra Usage")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .kerning(0.3)
+
+            if let p = percent {
+                ProgressBar(percent: p)
+
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(p)%")
+                            .font(.system(size: 14, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(.primary)
+                        if let s = spent, !s.isEmpty {
+                            Text(s)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    if let reset = resetText, !reset.isEmpty {
+                        Text(reset)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            } else {
                 RoundedRectangle(cornerRadius: 3)
                     .fill(Color.white.opacity(0.08))
                     .frame(height: 6)

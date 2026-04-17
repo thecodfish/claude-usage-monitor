@@ -10,6 +10,9 @@ final class UsageModel: ObservableObject {
     @Published var weeklyReset: String? = nil
     @Published var designPercent: Int? = nil
     @Published var designReset: String? = nil
+    @Published var extraPercent: Int? = nil
+    @Published var extraReset: String? = nil
+    @Published var extraSpent: String? = nil
     @Published var lastUpdated: Date? = nil
     @Published var isLoading: Bool = false
     @Published var isLoggedOut: Bool = false
@@ -187,6 +190,9 @@ final class UsageScraper: NSObject {
         var weeklyReset: String
         var designPercent: Int?
         var designReset: String?
+        var extraPercent: Int?
+        var extraReset: String?
+        var extraSpent: String?
     }
 
     private func extractData() async throws -> UsageData {
@@ -213,6 +219,12 @@ final class UsageScraper: NSObject {
             data.designReset   = result["designReset"] as? String ?? ""
         }
 
+        if let ep = result["extraPercent"] {
+            data.extraPercent = (ep as? Int) ?? Int((ep as? Double) ?? 0)
+            data.extraReset   = result["extraReset"] as? String ?? ""
+            data.extraSpent   = result["extraSpent"] as? String ?? ""
+        }
+
         return data
     }
 
@@ -226,6 +238,9 @@ final class UsageScraper: NSObject {
         model.weeklyReset    = data.weeklyReset
         model.designPercent  = data.designPercent
         model.designReset    = data.designReset
+        model.extraPercent   = data.extraPercent
+        model.extraReset     = data.extraReset
+        model.extraSpent     = data.extraSpent
         model.lastUpdated    = Date()
         model.isLoggedOut    = false
 
@@ -314,16 +329,19 @@ final class UsageScraper: NSObject {
             weeklyReset:    weekly.reset
         };
 
-        // Check bars beyond the first two for additional usage meters (e.g. Design).
-        // A usage meter always has "Resets" text; API spend does not.
-        // Identify the meter by its section text rather than a heading element,
-        // since Claude.ai uses plain text labels, not semantic heading tags.
+        // Check bars beyond the first two for additional usage meters (e.g. Design, Extra usage).
+        // Sections are identified by their text content; API spend has no "Resets" line so it's skipped.
         for (var i = 2; i < bars.length; i++) {
             var bar = parseBar(bars[i]);
             if (!bar.reset) continue;
             if (/design/i.test(bar.sectionText)) {
                 out.designPercent = bar.percent;
                 out.designReset   = bar.reset;
+            } else if (/extra usage/i.test(bar.sectionText)) {
+                out.extraPercent = bar.percent;
+                out.extraReset   = bar.reset;
+                var spentMatch = bar.sectionText.match(/\\$[\\d,.]+\\s*spent/i);
+                out.extraSpent = spentMatch ? spentMatch[0].trim() : '';
             }
         }
 
