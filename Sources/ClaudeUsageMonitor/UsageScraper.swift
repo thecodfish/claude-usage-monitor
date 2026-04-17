@@ -8,6 +8,8 @@ final class UsageModel: ObservableObject {
     @Published var sessionReset: String? = nil   // e.g. "Resets in 3 hr 20 min"
     @Published var weeklyPercent: Int? = nil
     @Published var weeklyReset: String? = nil
+    @Published var designPercent: Int? = nil
+    @Published var designReset: String? = nil
     @Published var lastUpdated: Date? = nil
     @Published var isLoading: Bool = false
     @Published var isLoggedOut: Bool = false
@@ -178,8 +180,16 @@ final class UsageScraper: NSObject {
 
     // MARK: - Extract Data
 
-    private func extractData() async throws -> (sessionPercent: Int, sessionReset: String,
-                                                 weeklyPercent: Int, weeklyReset: String) {
+    private struct UsageData {
+        var sessionPercent: Int
+        var sessionReset: String
+        var weeklyPercent: Int
+        var weeklyReset: String
+        var designPercent: Int?
+        var designReset: String?
+    }
+
+    private func extractData() async throws -> UsageData {
         guard let result = try await webView.evaluateJavaScript(Self.extractionScript) as? [String: Any] else {
             throw ScraperError.parseFailure
         }
@@ -195,18 +205,27 @@ final class UsageScraper: NSObject {
         let wp = (result["weeklyPercent"] as? Int) ?? Int((result["weeklyPercent"] as? Double) ?? 0)
         let wr = result["weeklyReset"] as? String ?? ""
 
-        return (sp, sr, wp, wr)
+        var data = UsageData(sessionPercent: sp, sessionReset: sr,
+                             weeklyPercent: wp, weeklyReset: wr)
+
+        if let dp = result["designPercent"] {
+            data.designPercent = (dp as? Int) ?? Int((dp as? Double) ?? 0)
+            data.designReset   = result["designReset"] as? String ?? ""
+        }
+
+        return data
     }
 
     // MARK: - Apply
 
     @MainActor
-    private func applyData(_ data: (sessionPercent: Int, sessionReset: String,
-                                    weeklyPercent: Int, weeklyReset: String)) {
+    private func applyData(_ data: UsageData) {
         model.sessionPercent = data.sessionPercent
         model.sessionReset   = data.sessionReset
         model.weeklyPercent  = data.weeklyPercent
         model.weeklyReset    = data.weeklyReset
+        model.designPercent  = data.designPercent
+        model.designReset    = data.designReset
         model.lastUpdated    = Date()
         model.isLoggedOut    = false
 
@@ -250,7 +269,8 @@ final class UsageScraper: NSObject {
 
     // Confirmed against live claude.ai/settings/usage DOM (2026-04-08).
     // Strategy: find [role="progressbar"] → aria-valuenow for %, walk up DOM for "Resets" text.
-    // Bars: [0] = Current session, [1] = Weekly/All models, [2] = API spend (ignored).
+    // Bars: [0] = Current session, [1] = Weekly/All models, then optional meters (Design, etc.)
+    // API spend bar has no "Resets" text — that's how we distinguish usage meters from spend meters.
     static let extractionScript = """
     (function() {
         var bars = Array.from(document.querySelectorAll('[role="progressbar"]'));
@@ -276,15 +296,40 @@ final class UsageScraper: NSObject {
             return { percent: percent, reset: '' };
         }
 
+        function findHeading(el) {
+            var node = el;
+            for (var i = 0; i < 10; i++) {
+                if (!node.parentElement) break;
+                node = node.parentElement;
+                var heading = node.querySelector('h1,h2,h3,h4,h5,h6,[class*="heading"],[class*="title"]');
+                if (heading) return heading.innerText.trim();
+            }
+            return '';
+        }
+
         var session = parseBar(bars[0]);
         var weekly  = parseBar(bars[1]);
 
-        return {
+        var out = {
             sessionPercent: session.percent,
             sessionReset:   session.reset,
             weeklyPercent:  weekly.percent,
             weeklyReset:    weekly.reset
         };
+
+        // Check bars beyond the first two for additional usage meters (e.g. Design).
+        // A usage meter always has "Resets" text; API spend does not.
+        for (var i = 2; i < bars.length; i++) {
+            var bar = parseBar(bars[i]);
+            if (!bar.reset) continue;
+            var heading = findHeading(bars[i]).toLowerCase();
+            if (/design/.test(heading)) {
+                out.designPercent = bar.percent;
+                out.designReset   = bar.reset;
+            }
+        }
+
+        return out;
     })()
     """
 }
