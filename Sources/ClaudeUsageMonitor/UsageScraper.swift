@@ -290,21 +290,10 @@ final class UsageScraper: NSObject {
                 var text = node.innerText || '';
                 var resetMatch = text.match(/Resets[^\\n]+/);
                 if (resetMatch) {
-                    return { percent: percent, reset: resetMatch[0].trim() };
+                    return { percent: percent, reset: resetMatch[0].trim(), sectionText: text };
                 }
             }
-            return { percent: percent, reset: '' };
-        }
-
-        function findHeading(el) {
-            var node = el;
-            for (var i = 0; i < 10; i++) {
-                if (!node.parentElement) break;
-                node = node.parentElement;
-                var heading = node.querySelector('h1,h2,h3,h4,h5,h6,[class*="heading"],[class*="title"]');
-                if (heading) return heading.innerText.trim();
-            }
-            return '';
+            return { percent: percent, reset: '', sectionText: '' };
         }
 
         var session = parseBar(bars[0]);
@@ -319,11 +308,12 @@ final class UsageScraper: NSObject {
 
         // Check bars beyond the first two for additional usage meters (e.g. Design).
         // A usage meter always has "Resets" text; API spend does not.
+        // Identify the meter by its section text rather than a heading element,
+        // since Claude.ai uses plain text labels, not semantic heading tags.
         for (var i = 2; i < bars.length; i++) {
             var bar = parseBar(bars[i]);
             if (!bar.reset) continue;
-            var heading = findHeading(bars[i]).toLowerCase();
-            if (/design/.test(heading)) {
+            if (/design/i.test(bar.sectionText)) {
                 out.designPercent = bar.percent;
                 out.designReset   = bar.reset;
             }
