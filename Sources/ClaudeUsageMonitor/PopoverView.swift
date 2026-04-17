@@ -38,6 +38,19 @@ struct PopoverView: View {
                     resetText: model.weeklyReset
                 )
 
+                if model.designPercent != nil {
+                    Divider()
+                        .opacity(0.15)
+                        .padding(.vertical, 12)
+
+                    // Design
+                    UsageRow(
+                        label: "Design",
+                        percent: model.designPercent,
+                        resetText: model.designReset
+                    )
+                }
+
                 Divider()
                     .opacity(0.15)
                     .padding(.vertical, 12)
